@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<!-- <script src="https://d3js.org/d3.v2.min.js?2.9.3"></script> -->
+<script src="https://d3js.org/d3.v4.min.js"></script>
+
+
+<!-- http://bl.ocks.org/jose187/4733747 -->
+
+<style>
+
+body {
+    /* display: flex; */
+}
+
+.link {
+    stroke: #aaa;
+}
+
+.node text {
+    stroke:#333;
+    cursor:pointer;
+}
+
+.node circle{
+    stroke:#fff;
+    stroke-width:3px;
+    fill: #aaa;
+}
+
+svg {
+    border: black solid 1px;
+    z-index: -1;
+}
+
+.info {
+    margin-right: auto;
+    width: 15%;
+    /* background-color: black; */
+    height: auto;
+    position: absolute;
+    right: 0px;
+}
+
+h3 {
+    text-align: center;
+}
+
+</style>
+<body>
+
+    <div class="info" id="info">
+        <h3>Skye Kychenthal<br>Data Visualizer</h3>
+
+        <h4> 
+
+            Name: <span id="name"></span>
+            <br><br>
+            Eq: <span id="eq"></span>
+            <br><br>
+            Desc.: <span id="desc"></span>
+
+        </h4>
+    </div>
+
+</body>
+
+<script>
+
+function get_parent_num (json, source) {
+    let _p = -1;
+    json.nodes.forEach (p => {
+        if (p.name == source) {
+            return _p = p.id;
+        }
+    });
+    return _p;
+}
+
+function get_parents (json, source) {
+    let parents = []
+    source.parents.forEach (p => {
+        parents.push(get_parent_num(json, p));
+    })
+    return parents;
+}
+
+var width = 960*1.25,
+    height = 500*1.25
+
+var svg = d3.select("body").append("svg")
+    .attr("width", "85%")
+    .attr("height", height)
+
+function dist(json) {
+    return json.nodes.length * 25
+    // return json.links.length * 75;
+}    
+
+function dragstarted(d) {
+    // if (!d3.event.active) force.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+}
+
+function dragged(d) {
+    d.fx = d3.event.x;
+    d.fy = d3.event.y;
+}
+
+function dragended(d) {
+    // if (!d3.event.active) force.alphaTarget(0);
+    d.fx = null;
+    d.fy = null;
+} 
+
+d3.json("./data.json", function(json) {
+
+    console.log (':((')
+
+    json.links = []
+
+    for (let i = 0; i < json.nodes.length; i++) {
+        json.nodes[i].id = i;
+        json.nodes[i].weight = 2;
+    }
+
+    json.nodes.forEach (n => {
+        let parents = get_parents(json, n);
+        if (parents != undefined) {
+            parents.forEach (p => {
+                json.links.push (
+                    {
+                        "source": n.id,
+                        "target": p,
+                        "weight": 2
+                    }
+                )
+            })
+        }
+    })
+
+    var force = d3.forceSimulation()
+        // .gravity(0.01)
+        .force("link", d3.forceLink().distance(dist(json)).strength(0.125))
+        // .linkDistance(dist(json))
+        // .force("strength", d3.forceLink().distance(dist))
+        // .linkStrength(0.125)
+        // .size([width, height])
+        .force("charge", d3.forceManyBody(30))
+        .force("center", d3.forceCenter(600, height/2 ))
+        // .charge(function(d){
+        //     var charge = -500;
+        //     if (d.index === 0) charge = 10 * charge;
+        //     return charge;
+        // });
+
+    force
+        .nodes(json.nodes)
+        // .links(json.links)
+        // .start();
+
+    force.force("link")
+        .links (json.links);
+
+    var link = svg.selectAll(".link")
+        .data(json.links)
+        .enter().append("line")
+        .attr("class", "link")
+        // .style("stroke-width", function(d) { return Math.sqrt(d.weight); });
+
+    var node = svg.selectAll(".node")
+        .data(json.nodes)
+        .enter().append("g")
+        .attr("class", "node")
+        .attr ('opacity', '0.85')
+        .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended))  
+        .on('mouseover', function (d, i) {
+            d3.select(this).transition()
+               .duration('50')
+               .attr('opacity', '1');
+               let n = json.nodes[i]
+               document.getElementById("name").innerHTML = n.name;
+               document.getElementById("eq").innerHTML = n.eq;
+               document.getElementById("desc").innerHTML = n.desc;
+        })
+        .on('mouseout', function (d, i) {
+            d3.select(this).transition()
+               .duration('50')
+               .attr('opacity', '0.85');
+        })
+
+    node.append("circle")
+        .attr("r","40")
+        .attr("id", "tooltip");
+
+    node.append("text")
+        .attr("dx", 0)
+        .attr("dy", ".35em")
+        .attr("text-anchor", "middle")
+        .text(function(d) { return d.name });
+    
+    d3.select("#tooltip")
+
+    force.on("tick", function() {
+        link.attr("x1", function(d) { return d.source.x; })
+            .attr("y1", function(d) { return d.source.y; })
+            .attr("x2", function(d) { return d.target.x; })
+            .attr("y2", function(d) { return d.target.y; });
+
+        node.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+    });
+});
+
+</script>
