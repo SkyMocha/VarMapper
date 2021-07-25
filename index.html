@@ -25,7 +25,7 @@ body {
 .node circle{
     stroke:#fff;
     stroke-width:3px;
-    fill: #aaa;
+    /* fill: #aaa; */
 }
 
 svg {
@@ -59,6 +59,8 @@ h3 {
             Eq: <span id="eq"></span>
             <br><br>
             Desc.: <span id="desc"></span>
+            <br><br>
+            Parents: <span id="parents"></span>
 
         </h4>
     </div>
@@ -94,31 +96,40 @@ function get_parents (json, source) {
 var width = 960*1.25,
     height = 500*1.25
 
+function zoomed() {
+    container.attr("transform", d3.event.transform)
+}
+
+function slided(d) {
+        zoom.scaleTo(svg, d3.select(this).property("value"));
+        console.log ("UWUWUUW");
+    }
+
+var zoom = d3.zoom()
+    .scaleExtent([0.25, 5])
+    .on("zoom", zoomed);
+
+var slider = d3.select("body").append("p").append("input")
+    .datum({})
+    .attr("type", "range")
+    .attr("value", zoom.scaleExtent()[0])
+    .attr("min", zoom.scaleExtent()[0])
+    .attr("max", zoom.scaleExtent()[1])
+    .attr("step", (zoom.scaleExtent()[1] - zoom.scaleExtent()[0]) / 100)
+    .on("input", slided);
+
 var svg = d3.select("body").append("svg")
     .attr("width", "78%")
     .attr("height", height)
+    .call(zoom);
+
+var container = d3.select("svg").append("g")
 
 function dist(json) {
-    return json.nodes.length * 25
+    return json.nodes.length * 20
     // return json.links.length * 75;
 }    
 
-function dragstarted(d) {
-    // if (!d3.event.active) force.alphaTarget(0.3).restart();
-    d.fx = d.x;
-    d.fy = d.y;
-}
-
-function dragged(d) {
-    d.fx = d3.event.x;
-    d.fy = d3.event.y;
-}
-
-function dragended(d) {
-    // if (!d3.event.active) force.alphaTarget(0);
-    d.fx = null;
-    d.fy = null;
-} 
 
 $(document).ready(function() {
     $.ajax({
@@ -135,26 +146,46 @@ function and_to_arr (parents) {
 function run (data) {
     console.log (data)
     let arr = $.csv.toArrays(data);
-    for (let i = 0; i < arr.length; i++) {
-        for (let j = 0; j < arr[i].length; j++) {
-            if (j < 2 || j > 5){
-                delete (arr[i][j])
-            }
-        }
-    }
+    // for (let i = 0; i < arr.length; i++) {
+    //     for (let j = 0; j < arr[i].length; j++) {
+    //         if (j < 2 || j > 5){
+    //             delete (arr[i][j])
+    //         }
+    //     }
+    // }
 
     let json = { "nodes": [], "links": [] }
 
     let i = 0
 
+    let colors = []
+
+    var c_centers = [];
+    var c_heights = [];
+    let c_index = -100;
+    let c_change = 200
+
     arr.forEach (line => {
-        if (line[2] != "" && i != 0)
+        if (line[2] != "" && i != 0) {
+            let parents = and_to_arr(line[4]);
+            let center = parents[0] == "Last Hit"; // sets whether or not its the center of a cluster
+            if (colors.indexOf(line[1]) == -1) // adds the color to the list of colors
+                colors.push(line[1])
+
+            c_centers.push(c_index);
+            c_index+= c_change;
+            c_heights.push(Math.random() * (height/2+50 - height/2-50) + height/2-50);
+
             json.nodes.push({
                 name: line[2],
                 eq: line[3],
-                parents: and_to_arr(line[4]),
-                desc: line[5]
+                parents: parents,
+                desc: line[5],
+                col: line[1],
+                notes: line[0],
+                center: center,
             })
+        }
         i+=1
     })
 
@@ -187,12 +218,10 @@ function run (data) {
     var force = d3.forceSimulation()
         // .gravity(0.01)
         .force("link", d3.forceLink().distance(dist(json)).strength(0.125))
-        // .linkDistance(dist(json))
-        // .force("strength", d3.forceLink().distance(dist))
-        // .linkStrength(0.125)
-        // .size([width, height])
         .force("charge", d3.forceManyBody(30))
-        .force("center", d3.forceCenter(600, height/2 ))
+        .force("collide",d3.forceCollide())
+        
+        // .force("center", d3.forceCenter( 600, height/2 ))
         // .charge(function(d){
         //     var charge = -500;
         //     if (d.index === 0) charge = 10 * charge;
@@ -205,19 +234,44 @@ function run (data) {
         // .start();
 
     force.force("link")
-        .links (json.links);
+        .links (json.links)
+    
+    force.force("collide").radius((d)=>{return 55})
 
-    var link = svg.selectAll(".link")
+    function dragstarted(d) {
+        if (!d3.event.active) force.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+
+    function dragged(d) {
+        d.fx = d3.event.x;
+        d.fy = d3.event.y;
+    }
+
+    function dragended(d) {
+        if (!d3.event.active) force.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+    } 
+
+    var link = container.selectAll(".link")
         .data(json.links)
         .enter().append("line")
         .attr("class", "link")
         // .style("stroke-width", function(d) { return Math.sqrt(d.weight); });
 
-    var node = svg.selectAll(".node")
+    function col(d){
+        console.log (d);
+        return d.col;
+    }
+
+    var node = container.selectAll(".node")
         .data(json.nodes)
         .enter().append("g")
         .attr("class", "node")
         .attr ('opacity', '0.85')
+        .attr ('fill', col)
         .call(d3.drag()
                 .on("start", dragstarted)
                 .on("drag", dragged)
@@ -230,6 +284,7 @@ function run (data) {
             document.getElementById("name").innerHTML = n.name;
             document.getElementById("eq").innerHTML = n.eq;
             document.getElementById("desc").innerHTML = n.desc;
+            document.getElementById("parents").innerHTML = n.parents;
         })
         .on('mouseout', function (d, i) {
             d3.select(this).transition()
@@ -239,7 +294,7 @@ function run (data) {
 
     node.append("circle")
         .attr("r","40")
-        .attr("id", "tooltip");
+        .attr("id", "tooltip")
 
     node.append("text")
         .attr("dx", 0)
@@ -250,12 +305,47 @@ function run (data) {
     d3.select("#tooltip")
 
     force.on("tick", function() {
+
+        var k = this.alpha() * 0.5;
+
+        let currCenter;
+    
+        let col_index = 0;
+        colors.forEach(c => {
+
+            json.nodes.forEach(function(n, i) {
+            
+                // if (k > 0.05) {
+                    if (n.center && c == n.col) {
+                        n.x += (c_centers[col_index] - n.x)*0.25;
+                        n.y += (c_heights[col_index] - n.y)*0.25;
+                    }
+
+                    if (n.parents[0] == "Final") {
+                        n.x = 500;
+                        n.y = height/9;
+                    }
+                // }
+
+                if (c == n.col) {
+                    n.y += (c_heights[col_index] - n.y) * k;
+                    n.x += (c_centers[col_index] - n.x) * k;
+                }
+
+            });
+            
+            col_index++;
+        })
+        
+
         link.attr("x1", function(d) { return d.source.x; })
             .attr("y1", function(d) { return d.source.y; })
             .attr("x2", function(d) { return d.target.x; })
             .attr("y2", function(d) { return d.target.y; });
 
-        node.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; });
+        node.attr("transform", function(d) { 
+            return "translate(" + d.x + "," + d.y + ")"; 
+        });
     });
 // });
 
