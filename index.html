@@ -14,7 +14,8 @@ body {
 }
 
 .link {
-    stroke: #aaa;
+    /* stroke: #aaa; */
+    stroke-width: 3px;
 }
 
 .node text {
@@ -61,6 +62,8 @@ h3 {
             Desc.: <span id="desc"></span>
             <br><br>
             Parents: <span id="parents"></span>
+            <br><br>
+            Effecting: <span id="effecting"></span>
 
         </h4>
     </div>
@@ -71,16 +74,16 @@ h3 {
 
 function get_parent_num (json, source) {
     console.log (source)
-    if (source == "Final")
+    if (source.toLowerCase() == "final")
         return [0]
     let _p = -1;
     json.nodes.forEach (p => {
-        if (p.name == source) {
+        if (p.name.toLowerCase() == source.toLowerCase()) {
             return _p = p.id;
         }
     });
     if (_p == -1) {
-        console.error ("PARENT NOT FOUND");
+        console.error (`PARENT "${source}" NOT FOUND`);
     }
     return _p;
 }
@@ -101,9 +104,8 @@ function zoomed() {
 }
 
 function slided(d) {
-        zoom.scaleTo(svg, d3.select(this).property("value"));
-        console.log ("UWUWUUW");
-    }
+    zoom.scaleTo(svg, d3.select(this).property("value"));
+}
 
 var zoom = d3.zoom()
     .scaleExtent([0.25, 5])
@@ -160,21 +162,12 @@ function run (data) {
 
     let colors = []
 
-    var c_centers = [];
-    var c_heights = [];
-    let c_index = -100;
-    let c_change = 200
-
     arr.forEach (line => {
         if (line[2] != "" && i != 0) {
             let parents = and_to_arr(line[4]);
             let center = parents[0] == "Last Hit"; // sets whether or not its the center of a cluster
             if (colors.indexOf(line[1]) == -1) // adds the color to the list of colors
                 colors.push(line[1])
-
-            c_centers.push(c_index);
-            c_index+= c_change;
-            c_heights.push(Math.random() * (height/2+50 - height/2-50) + height/2-50);
 
             json.nodes.push({
                 name: line[2],
@@ -184,9 +177,22 @@ function run (data) {
                 col: line[1],
                 notes: line[0],
                 center: center,
+                effecting: line[6]
             })
         }
         i+=1
+    })
+
+    var c_centers = [];
+    var c_heights = [];
+    let multiplier = 10
+    let c_index = json.nodes.length * multiplier*2.5 * -1;
+    let c_change = json.nodes.length * multiplier
+
+    colors.forEach (c => {
+        c_centers.push(c_index);
+        c_index+= c_change;
+        c_heights.push(Math.random() * (height/2+50 - height/2-50) + height/2-50);
     })
 
     console.log (json);
@@ -255,10 +261,15 @@ function run (data) {
         d.fy = null;
     } 
 
+    function linkColor (d){
+        return d.target.col
+    }
+
     var link = container.selectAll(".link")
         .data(json.links)
         .enter().append("line")
         .attr("class", "link")
+        .attr ("stroke", linkColor)
         // .style("stroke-width", function(d) { return Math.sqrt(d.weight); });
 
     function col(d){
@@ -285,6 +296,7 @@ function run (data) {
             document.getElementById("eq").innerHTML = n.eq;
             document.getElementById("desc").innerHTML = n.desc;
             document.getElementById("parents").innerHTML = n.parents;
+            document.getElementById("effecting").innerHTML = n.effecting;
         })
         .on('mouseout', function (d, i) {
             d3.select(this).transition()
@@ -322,8 +334,8 @@ function run (data) {
                     }
 
                     if (n.parents[0] == "Final") {
-                        n.x = 500;
-                        n.y = height/9;
+                        n.x = width/2;
+                        n.y = height/2 * -1;
                     }
                 // }
 
